@@ -2,6 +2,8 @@ package com.k2view.agent;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+
+import java.io.FileNotFoundException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -11,14 +13,20 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.yaml.snakeyaml.Yaml;
+
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.util.Map;
+
 
 public class K2ViewAgent {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(K2ViewAgent.class);
-
+    private static final Map<String, Object> config = YamlToMap("k2view-agent.yaml");
 
     public static void main(String[] args) {
-        LOGGER.
+
         int pollingInterval = 60;
         Queue<String> queue = new ConcurrentLinkedQueue<>();
 
@@ -66,7 +74,9 @@ public class K2ViewAgent {
 
     private static ArrayList<String> getUrls() {
         // Replace this code with the logic to read the URLs from the REST API
-        final String url = "http://127.0.0.1:5000/";
+        String url = config.get("MANAGER_URL").toString();
+
+        LOGGER.info("MANAGER URL: " + url);
         HttpClient client = HttpClient.newBuilder().build();
         ArrayList<String> urls = new ArrayList<>();
         HttpRequest request = HttpRequest.newBuilder()
@@ -82,12 +92,22 @@ public class K2ViewAgent {
 
             for (Map<String, Object> t: listOfMaps) {
                 urls.add(t.get("url").toString());
-//                System.out.println(t);
             }
             return urls;
         } catch (Exception e) {
             e.printStackTrace();
             return null;
+        }
+    }
+
+    private static Map<String, Object> YamlToMap(String path) {
+        Yaml yaml = new Yaml();
+        InputStream inputStream;
+        try {
+            inputStream = new FileInputStream(path);
+            return yaml.load(inputStream);
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException(e);
         }
     }
 }
