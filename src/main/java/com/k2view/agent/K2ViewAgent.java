@@ -47,6 +47,7 @@ public class K2ViewAgent {
                 }
             }
         });
+        thread1.setName("MANAGER");
         thread1.start();
 
         // Start the second thread that polls the queue and GETs the URLs
@@ -68,6 +69,7 @@ public class K2ViewAgent {
                 }
             }
         });
+        thread2.setName("WORKER");
         thread2.start();
     }
 
