@@ -4,10 +4,12 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
@@ -28,15 +30,16 @@ public class K2ViewAgent {
     public static void main(String[] args) {
 
         int pollingInterval = 60;
-        Queue<String> queue = new ConcurrentLinkedQueue<>();
+        Queue<String> incomingQueue = new ConcurrentLinkedQueue<>();
 
         // Start the first thread that reads a list of URLs
         Thread thread1 = new Thread(() -> {
             while (true) {
+
                 ArrayList<String> urls = getUrls();
                 if (urls != null) {
                     for (String url : urls) {
-                        queue.offer(url);
+                        incomingQueue.offer(url);
                         LOGGER.debug("Added URL to the Queue:" + url);
                     }
                 }
@@ -50,11 +53,11 @@ public class K2ViewAgent {
         thread1.setName("MANAGER");
         thread1.start();
 
-        // Start the second thread that polls the queue and GETs the URLs
+        // Start the second thread that polls the incomingQueue and GETs the URLs
         Thread thread2 = new Thread(() -> {
             HttpClient client = HttpClient.newBuilder().build();
             while (true) {
-                String url = queue.poll();
+                String url = incomingQueue.poll();
                 if (url != null) {
                     HttpRequest request = HttpRequest.newBuilder()
                             .GET()
@@ -111,5 +114,36 @@ public class K2ViewAgent {
         } catch (FileNotFoundException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private static String GetJWTToken(Map<String, Object> config) {
+        HttpClient client = HttpClient.newBuilder().build();
+
+        // Define the login request data
+        String requestBody = "{\"username\": \""+ config.get("jwt_username") +
+                "\",\"password\":\"" +
+                config.get("jwt_password")+
+                "\"}";
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(config.get("jwt_url").toString()))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody, StandardCharsets.UTF_8))
+                .build();
+
+        // Send the login request and get the response
+        HttpResponse<String> response = null;
+        try {
+            response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        System.out.println("Login response status code: " + response.statusCode());
+        System.out.println("Login response body: " + response.body());
+
+        // Get the JWT token from the response
+        return response.body().split("\"")[3];
+
     }
 }

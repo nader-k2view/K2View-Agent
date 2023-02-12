@@ -1,1 +1,5 @@
-MANAGER_URL: http://127.0.0.1:5000/
+manager_url: http://127.0.0.1:5000/
+jwt_url: http://127.0.0.1:5000/login
+jwt_username: user1
+jwt_password: password1
+
