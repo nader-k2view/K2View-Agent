@@ -1,4 +1,6 @@
 from flask import Flask, jsonify, make_response
+import time
+
 app = Flask(__name__)
 
 data = [
@@ -49,6 +51,8 @@ def get_data():
 def get_page(page_id):
     response = make_response(jsonify( {"page": page_id } ), 200)
     response.headers["Content-Type"] = "application/json"
+    if page_id == "2":
+        time.sleep(4)
     return response
 
 
