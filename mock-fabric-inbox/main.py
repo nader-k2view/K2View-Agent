@@ -7,12 +7,8 @@ data = [
     {
         "id": 1,
         "method": "GET",
-        "url": " http://127.0.0.1:5000/page/1",
-        "expected_response_code": 200,
-        "headers": [],
-        "timeout": 5,
-        "retries": 3,
-        "interval": 30,
+        "url": "http://127.0.0.1:5000/page/1",
+        "headers": "{}",
         "body": "",
     },
     {

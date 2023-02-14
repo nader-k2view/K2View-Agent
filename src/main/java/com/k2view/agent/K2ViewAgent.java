@@ -79,8 +79,6 @@ public class K2ViewAgent {
                                 responseMap.put("id", req.get("id"));
                                 responseMap.put("body", response.body().trim());
                                 responseMap.put("status", Integer.toString(response.statusCode()));
-                                responseMap.put("request", response.request().toString());
-                                responseMap.put("headers", response.headers().map().toString());
 
                                 JsonObject responseJson = new Gson().toJsonTree(responseMap).getAsJsonObject();
 
