@@ -1,6 +1,7 @@
 package com.k2view.agent;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 
 import java.io.FileNotFoundException;
@@ -27,14 +28,14 @@ public class K2ViewAgent {
 
     private static final int pollingInterval = 60;
     private static ConcurrentLinkedQueue<Map<String, Object>> requestsQueue = new ConcurrentLinkedQueue<>();
-    private static ConcurrentLinkedQueue<String> responseQueue = new ConcurrentLinkedQueue<>();
+    private static ConcurrentLinkedQueue<JsonObject> responseQueue = new ConcurrentLinkedQueue<>();
 
     public static void main(String[] args) {
 
 //        ConcurrentLinkedQueue<String> requestsQueue = new ConcurrentLinkedQueue<>();
 
         // Start the first thread that reads a list of URLs
-        Thread thread1 = new Thread(() -> {
+        Thread managerThread = new Thread(() -> {
             while (true) {
                 List<Map<String, Object>> requests = getRequests();
                 ArrayList<String> urls = getUrls(requests);
@@ -51,14 +52,14 @@ public class K2ViewAgent {
                 }
             }
         });
-        thread1.setName("MANAGER");
-        thread1.start();
+        managerThread.setName("MANAGER");
+        managerThread.start();
 
 
         // Start the second thread that polls the queue and GETs the URLs
-        Thread thread2 = new Thread(() -> {
+        Thread workerThread = new Thread(() -> {
             while (true) {
-                LOGGER.debug("Queue Length:" + requestsQueue.size());
+//                LOGGER.debug("Queue Length:" + requestsQueue.size());
 
                 while (!requestsQueue.isEmpty()) {
                     Map<String, Object> req = requestsQueue.poll();
@@ -72,31 +73,35 @@ public class K2ViewAgent {
                         try {
                                 HttpClient client = HttpClient.newBuilder().build();
                                 HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                            
-                                responseQueue.add(response.body());
-                                LOGGER.debug("Response: " + response.body().toString().trim());
+
+                                Map<String, Object> responseMap = new HashMap<>();
+
+                                responseMap.put("id", req.get("id"));
+                                responseMap.put("body", response.body().trim());
+                                responseMap.put("status", Integer.toString(response.statusCode()));
+                                responseMap.put("request", response.request().toString());
+                                responseMap.put("headers", response.headers().map().toString());
+
+                                JsonObject responseJson = new Gson().toJsonTree(responseMap).getAsJsonObject();
+
+                                responseQueue.add(responseJson);
+
+                                LOGGER.debug("Response: " + responseJson);
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
                     }).start();
                 }
-
-                // Wait for all responses to arrive
-                while (!responseQueue.isEmpty()) {
-                    System.out.println(responseQueue.poll());
-                }
+                // Sleep for 1 Second - Reduce CPU usage
                 try {
                     TimeUnit.SECONDS.sleep(1);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
             }
-
-
         });
-
-        thread2.setName("WORKER");
-        thread2.start();
+        workerThread.setName("WORKER");
+        workerThread.start();
     }
 
     private static List<Map<String, Object>> getRequests() {
@@ -122,8 +127,7 @@ public class K2ViewAgent {
             return null;
         }
     }
-
-
+    
     private static ArrayList<String> getUrls(List<Map<String, Object>> requests) {
         // Replace this code with the logic to read the URLs from the REST API
         ArrayList<String> urls = new ArrayList<>();
