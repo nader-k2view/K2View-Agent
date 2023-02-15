@@ -14,25 +14,46 @@ data = [
     {
         "id": 2,
         "method": "GET",
-        "url": " http://127.0.0.1:5000/page/2",
-        "headers": [],
-        "expected_response_code": 200,
-        "timeout": 5,
-        "retries": 3,
-        "interval": 30,
+        "url": "http://127.0.0.1:5000/page/2",
+        "headers":"{}",
         "body": "",
     },
     {
         "id": 3,
         "method": "GET",
-        "url": " http://127.0.0.1:5000/page/3",
-        "headers": [],
-        "expected_response_code": 200,
-        "timeout": 5,
-        "retries": 3,
-        "interval": 30,
+        "url": "http://127.0.0.1:5000/page/3",
+        "headers":"{}",
         "body": "",
     },
+    {
+        "id": 4,
+        "method": "GET",
+        "url": "http://127.0.0.1:5000/page/4",
+        "headers":"{}",
+        "body": "",
+    },
+    {
+        "id": 5,
+        "method": "GET",
+        "url": "http://127.0.0.1:5000/page/5",
+        "headers":"{}",
+        "body": "",
+    },
+    {
+        "id": 6,
+        "method": "GET",
+        "url": "http://127.0.0.1:5000/page/6",
+        "headers":"{}",
+        "body": "",
+    },
+    {
+        "id": 7,
+        "method": "GET",
+        "url": "http://127.0.0.1:5000/page/7",
+        "headers":"{}",
+        "body": "",
+    }
+
 
 ]
 
