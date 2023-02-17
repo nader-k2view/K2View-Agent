@@ -91,11 +91,14 @@ public class AgentSender implements AutoCloseable{
 
     private static HttpRequest getHttpRequest(Request request) {
 //        System.out.println(request.toString());
-        return HttpRequest.newBuilder()
+        HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(request.url()))
-                .method(request.method(), ofString(request.body()))
-                .headers(getHeaders(request))
-                .build();
+                .method(request.method(), ofString(request.body()));
+        String[] headers = getHeaders(request);
+        for(int i=0; i < headers.length; i+=2){
+            builder.header(headers[i], headers[i+1]);
+        }
+        return builder.build();
     }
 
     private void sendResponse(String id, HttpResponse<String> response) {
