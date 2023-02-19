@@ -86,14 +86,15 @@ public class K2ViewAgent {
                List<AgentSender.Response> mailResponses = null;
                try {
                    mailResponses = responses.get();
+                   if (! mailResponses.isEmpty()) {
+                       System.out.println(mailResponses.toString());
+                   }
+
                } catch (InterruptedException e) {
                    throw new RuntimeException(e);
                } catch (ExecutionException e) {
                    throw new RuntimeException(e);
                }
-                if (! mailResponses.isEmpty()) {
-                    System.out.println(mailResponses.toString());
-                }
            }
 
         });
