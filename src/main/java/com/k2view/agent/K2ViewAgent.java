@@ -10,7 +10,9 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,51 +57,94 @@ public class K2ViewAgent {
         managerThread.setName("MANAGER");
         managerThread.start();
 
-
         // Start the second thread that polls the queue and GETs the URLs
         Thread workerThread = new Thread(() -> {
-            while (true) {
-//                LOGGER.debug("Queue Length:" + requestsQueue.size());
-
+          AgentSender agentSender = new AgentSender(10);
+           while (true) {
                 while (!requestsQueue.isEmpty()) {
                     Map<String, Object> req = requestsQueue.poll();
                     String url = req.get("url").toString().trim();
-                    HttpRequest request = HttpRequest.newBuilder()
-                            .uri(URI.create(url))
-                            .method(req.get("method").toString().trim(), HttpRequest.BodyPublishers.noBody())
-                            .build();
+                    ///
+                    AgentSender.Request request = new AgentSender.Request(
+                            req.get("id").toString(),
+                            url,
+                            req.get("method").toString(),
+                            "",
+                            ""
+                    );
+                    try {
+                        agentSender.send(request);
 
-                    new Thread(() -> {
-                        try {
-                                HttpClient client = HttpClient.newBuilder().build();
-                                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-                                Map<String, Object> responseMap = new HashMap<>();
-
-                                responseMap.put("id", req.get("id"));
-                                responseMap.put("body", response.body().trim());
-                                responseMap.put("status", Integer.toString(response.statusCode()));
-
-                                JsonObject responseJson = new Gson().toJsonTree(responseMap).getAsJsonObject();
-
-                                responseQueue.add(responseJson);
-
-                                LOGGER.debug("Response: " + responseJson);
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                    }).start();
+                    } catch (InterruptedException e) {
+                        System.err.println("Interrupted while waiting for response: " + e.getMessage());
+                    }catch (Exception e) {
+                        System.err.println("Error while sending request: " + e.getMessage());
+                    }
                 }
-                // Sleep for 1 Second - Reduce CPU usage
-                try {
-                    TimeUnit.SECONDS.sleep(1);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
+                ///
+               CompletableFuture<List<AgentSender.Response>> responses = agentSender.receiveAsync(1, TimeUnit.SECONDS);
+               List<AgentSender.Response> mailResponses = null;
+               try {
+                   mailResponses = responses.get();
+               } catch (InterruptedException e) {
+                   throw new RuntimeException(e);
+               } catch (ExecutionException e) {
+                   throw new RuntimeException(e);
+               }
+                if (! mailResponses.isEmpty()) {
+                    System.out.println(mailResponses.toString());
                 }
-            }
+           }
+
         });
         workerThread.setName("WORKER");
         workerThread.start();
+
+//        Thread workerThread = new Thread(() -> {
+//            while (true)
+//            while (!requestsQueue.isEmpty()) {
+//                Map<String, Object> req = requestsQueue.poll();
+//                String url = req.get("url").toString().trim();
+//                try (AgentSender agentSender = new AgentSender(10)) {
+//                    AgentSender.Request request = new AgentSender.Request(
+//                            req.get("id").toString(),
+//                            url,
+//                            req.get("method").toString(),
+//                            "",
+//                            ""
+//                    );
+//                    agentSender.send(request);
+//                    List<AgentSender.Response> responses = agentSender.receive(10, TimeUnit.SECONDS);
+//                    System.out.println(responses.toString());
+//
+//                                Map<String, Object> responseMap = new HashMap<>();
+//
+//                                responseMap.put("id", req.get("id"));
+//                                responseMap.put("body", response.body().trim());
+//                                responseMap.put("status", Integer.toString(response.statusCode()));
+//
+//                                JsonObject responseJson = new Gson().toJsonTree(responseMap).getAsJsonObject();
+//
+//                                responseQueue.add(responseJson);
+//
+//                                LOGGER.debug("Response: " + responseJson);
+//                        } catch (Exception e) {
+//                            e.printStackTrace();
+//                        }
+//                    }).start();
+//                }
+                // Sleep for 1 Second - Reduce CPU usage
+//                try {
+//                    TimeUnit.SECONDS.sleep(1);
+//                } catch (InterruptedException e) {
+//                    e.printStackTrace();
+//                }
+//            }
+//        });
+
+
+//        workerThread.setName("WORKER");
+//        workerThread.start();
     }
 
     private static List<Map<String, Object>> getRequests() {

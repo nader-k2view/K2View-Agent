@@ -14,26 +14,24 @@ data = [
     {
         "id": 2,
         "method": "GET",
-        "url": " http://127.0.0.1:5000/page/2",
-        "headers": [],
-        "expected_response_code": 200,
-        "timeout": 5,
-        "retries": 3,
-        "interval": 30,
+        "url": "http://127.0.0.1:5000/page/2",
+        "headers": "{}",
         "body": "",
     },
     {
         "id": 3,
         "method": "GET",
-        "url": " http://127.0.0.1:5000/page/3",
-        "headers": [],
-        "expected_response_code": 200,
-        "timeout": 5,
-        "retries": 3,
-        "interval": 30,
+        "url": "http://127.0.0.1:5000/page/3",
+        "headers": "{}",
         "body": "",
     },
-
+    {
+        "id": 4,
+        "method": "GET",
+        "url": "http://127.0.0.1:5000/page/4",
+        "headers": "{}",
+        "body": "",
+    }
 ]
 
 @app.route("/")
@@ -47,7 +45,7 @@ def get_data():
 def get_page(page_id):
     response = make_response(jsonify( {"page": page_id } ), 200)
     response.headers["Content-Type"] = "application/json"
-    if page_id == "2":
+    if page_id == "3":
         time.sleep(4)
     return response
 
