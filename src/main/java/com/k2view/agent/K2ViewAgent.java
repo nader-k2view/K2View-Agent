@@ -87,7 +87,15 @@ public class K2ViewAgent {
                try {
                    mailResponses = responses.get();
                    if (! mailResponses.isEmpty()) {
-                       System.out.println(mailResponses.toString());
+                       Map<String, Object> responseMap = new HashMap<>();
+                       for (AgentSender.Response response: mailResponses) {
+                           responseMap.put("id", response.id().toString());
+                           responseMap.put("body", response.body().trim());
+                           responseMap.put("status", response.code());
+                           JsonObject responseJson = new Gson().toJsonTree(responseMap).getAsJsonObject();
+                           System.out.println(responseJson);
+
+                       }
                    }
 
                } catch (InterruptedException e) {
@@ -95,57 +103,13 @@ public class K2ViewAgent {
                } catch (ExecutionException e) {
                    throw new RuntimeException(e);
                }
+
            }
 
         });
         workerThread.setName("WORKER");
         workerThread.start();
 
-//        Thread workerThread = new Thread(() -> {
-//            while (true)
-//            while (!requestsQueue.isEmpty()) {
-//                Map<String, Object> req = requestsQueue.poll();
-//                String url = req.get("url").toString().trim();
-//                try (AgentSender agentSender = new AgentSender(10)) {
-//                    AgentSender.Request request = new AgentSender.Request(
-//                            req.get("id").toString(),
-//                            url,
-//                            req.get("method").toString(),
-//                            "",
-//                            ""
-//                    );
-//                    agentSender.send(request);
-//                    List<AgentSender.Response> responses = agentSender.receive(10, TimeUnit.SECONDS);
-//                    System.out.println(responses.toString());
-//
-//                                Map<String, Object> responseMap = new HashMap<>();
-//
-//                                responseMap.put("id", req.get("id"));
-//                                responseMap.put("body", response.body().trim());
-//                                responseMap.put("status", Integer.toString(response.statusCode()));
-//
-//                                JsonObject responseJson = new Gson().toJsonTree(responseMap).getAsJsonObject();
-//
-//                                responseQueue.add(responseJson);
-//
-//                                LOGGER.debug("Response: " + responseJson);
-//                        } catch (Exception e) {
-//                            e.printStackTrace();
-//                        }
-//                    }).start();
-//                }
-                // Sleep for 1 Second - Reduce CPU usage
-//                try {
-//                    TimeUnit.SECONDS.sleep(1);
-//                } catch (InterruptedException e) {
-//                    e.printStackTrace();
-//                }
-//            }
-//        });
-
-
-//        workerThread.setName("WORKER");
-//        workerThread.start();
     }
 
     private static List<Map<String, Object>> getRequests() {
