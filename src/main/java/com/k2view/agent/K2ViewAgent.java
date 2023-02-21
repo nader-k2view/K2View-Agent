@@ -1,14 +1,12 @@
 package com.k2view.agent;
 
 import com.google.gson.Gson;
-import com.google.gson.JsonObject;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,37 +15,51 @@ import java.util.Map;
 import static java.net.http.HttpRequest.BodyPublishers.ofString;
 
 /**
- * The main class for the K2ViewAgent program.
+ The K2ViewAgent class represents an agent that reads a list of URLs from a REST API and forwards the requests to external URLs via AgentSender object.
+ This class uses the Gson library for JSON serialization and the HttpClient class for sending HTTP requests.
  */
 public class K2ViewAgent {
 
     /**
-     * The logger used for the K2ViewAgent program.
+     * A logger for the `K2ViewAgent` class.
      */
-    private static final Logger LOGGER = LoggerFactory.getLogger(K2ViewAgent.class);
+    private final Logger LOGGER = LoggerFactory.getLogger(K2ViewAgent.class);
 
     /**
-     * The polling interval in seconds for the K2ViewAgent program.
+     * The polling interval in seconds for checking the inbox for new messages.
      */
-    private static final int pollingInterval = 60;
-    private static AgentSender agentSender;
-
-    static String id;
-    static long since;
-
-    static Gson gson = new Gson();
-    private static HttpClient client = HttpClient.newBuilder().build();
+    private int pollingInterval = 60;
 
     /**
-     * The queue that holds the requests to be processed by the K2ViewAgent program.
+     * The `AgentSender` instance used for sending requests and processing responses.
      */
-    //private static ConcurrentLinkedQueue<Map<String, Object>> requestsQueue = new ConcurrentLinkedQueue<>();
+    private AgentSender agentSender;
+
     /**
-     * The main method that runs the K2ViewAgent program.
-     *
-     * @param args The command line arguments for the program.
+     * The ID of the mailbox used for receiving messages.
      */
-    public static void main(String[] args) {
+    private String id;
+
+    /**
+     * The timestamp of the most recent inbox message received.
+     */
+    private long since;
+
+    /**
+     * An instance of the Google Gson library for JSON serialization/deserialization.
+     */
+    private Gson gson = new Gson();
+
+    /**
+     * An instance of the Java HTTP client for sending HTTP requests.
+     */
+    private HttpClient client = HttpClient.newBuilder().build();
+
+    /**
+     * Starts the agent by initializing the `agentSender`, `id`, and `since` fields,
+     * and calling the `start()` method.
+     */
+    public void run() {
         // Start the first thread that reads a list of URLs
         agentSender = new AgentSender(10_000);
         id = System.getenv("K2_MAILBOX_ID");
@@ -55,7 +67,11 @@ public class K2ViewAgent {
         start();
     }
 
-    private static void start() {
+    /**
+     * Starts the manager thread that continuously checks for new inbox messages
+     * and sends them to the `agentSender` for processing.
+     */
+    private void start() {
         Thread managerThread = new Thread(() -> {
             List<AgentSender.Response> responseList = new ArrayList<>();
             while (!Thread.interrupted()) {
@@ -82,14 +98,13 @@ public class K2ViewAgent {
         managerThread.start();
     }
 
-
-
     /**
-     * Gets a list of requests from the manager's inbox via REST API.
+     * Retrieves a list of inbox messages from the REST API.
      *
-     * @return A list of requests as a list of maps, or null if an error occurred.
+     * @param responses a list of previous responses received from the server
+     * @return a list of `AgentSender.Request` objects
      */
-    private static List<AgentSender.Request> getInboxMessages(List<AgentSender.Response> responses) {
+    private List<AgentSender.Request> getInboxMessages(List<AgentSender.Response> responses) {
         // Replace this code with the logic to read the URLs from the REST API
         String url = System.getenv("K2_MANAGER_URL");
 
@@ -117,6 +132,9 @@ public class K2ViewAgent {
         }
     }
 
+    /**
+     * A nested class representing a manager message.
+     */
     class ManagerMessage {
         List<AgentSender.Request> tasks;
     }
