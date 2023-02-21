@@ -5,33 +5,41 @@ app = Flask(__name__)
 
 data = [
     {
+        "id": 0,
+        "method": "GET",
+        "url": "https://api.api-ninjas.com/v1/facts?limit=1",
+        "headers": "X-Api-Key,o0YRD1EHvVK53J2xFUM64A==p8o7GINrZqxBztaT",
+        "body": "",
+    },
+    {
         "id": 1,
         "method": "GET",
         "url": "http://127.0.0.1:5000/page/1",
-        "headers": "{}",
+        "headers": "",
         "body": "",
     },
     {
         "id": 2,
         "method": "GET",
         "url": "http://127.0.0.1:5000/page/2",
-        "headers": "{}",
+        "headers": "",
         "body": "",
     },
     {
         "id": 3,
         "method": "GET",
         "url": "http://127.0.0.1:5000/page/3",
-        "headers": "{}",
+        "headers": "",
         "body": "",
     },
     {
         "id": 4,
         "method": "GET",
         "url": "http://127.0.0.1:5000/page/4",
-        "headers": "{}",
+        "headers": "",
         "body": "",
-    }
+    },
+
 ]
 
 @app.route("/")

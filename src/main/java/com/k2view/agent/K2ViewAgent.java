@@ -75,10 +75,10 @@ public class K2ViewAgent {
                     ///
                     AgentSender.Request request = new AgentSender.Request(
                             req.get("id").toString(),
-                            url,
+                            req.get("url").toString().trim(),
                             req.get("method").toString(),
-                            "",
-                            ""
+                            req.get("headers").toString(),
+                            req.get("body").toString()
                     );
                     try {
                         agentSender.send(request);
