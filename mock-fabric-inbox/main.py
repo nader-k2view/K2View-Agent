@@ -5,38 +5,38 @@ app = Flask(__name__)
 
 data = [
     {
-        "id": 0,
+        "taskId": 0,
         "method": "GET",
         "url": "https://api.api-ninjas.com/v1/facts?limit=1",
-        "headers": "X-Api-Key,o0YRD1EHvVK53J2xFUM64A==p8o7GINrZqxBztaT",
+        "header": "X-Api-Key,o0YRD1EHvVK53J2xFUM64A==p8o7GINrZqxBztaT",
         "body": "",
     },
     {
-        "id": 1,
+        "taskId": 1,
         "method": "GET",
         "url": "http://127.0.0.1:5000/page/1",
-        "headers": "",
+        "header": "",
         "body": "",
     },
     {
-        "id": 2,
+        "taskId": 2,
         "method": "GET",
         "url": "http://127.0.0.1:5000/page/2",
-        "headers": "",
+        "header": "",
         "body": "",
     },
     {
-        "id": 3,
+        "taskId": 3,
         "method": "GET",
         "url": "http://127.0.0.1:5000/page/3",
-        "headers": "",
+        "header": "",
         "body": "",
     },
     {
-        "id": 4,
+        "taskId": 4,
         "method": "GET",
         "url": "http://127.0.0.1:5000/page/4",
-        "headers": "",
+        "header": "",
         "body": "",
     },
 

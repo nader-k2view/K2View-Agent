@@ -26,12 +26,26 @@ public class AgentSender implements AutoCloseable{
      * Represents an HTTP request that is sent to the server.
      */
 
-    public record Request(String id, String url, String method, String headers, String body) {}
+    public class Request{
+       String taskId;
+       String url;
+       String method;
+       String header;
+       String body;
+
+       public Request(String taskId, String url, String method, String header, String body){
+           this.taskId = taskId;
+           this.url = url;
+           this.method = method;
+           this.header = header;
+           this.body = body;
+       }
+    }
     /**
      * Represents an HTTP response received from the server.
      */
 
-    public record Response(String id, int code, String body) {}
+    public record Response(String taskId, int code, String body) {}
 
     /**
      * A blocking queue that stores incoming requests.
@@ -180,7 +194,7 @@ public class AgentSender implements AutoCloseable{
     }
 
     /**
-     * Sends an HTTP request to the given URL with the given method and headers, and returns the response as a Response object.
+     * Sends an HTTP request to the given URL with the given method and header, and returns the response as a Response object.
      *
      * @param request the request to send
      * @throws RuntimeException if there was an error sending the HTTP request
@@ -188,11 +202,11 @@ public class AgentSender implements AutoCloseable{
     private void sendMail(Request request) {
         try {
             httpClient.sendAsync(getHttpRequest(request), ofString())
-                    .thenAcceptAsync(response -> sendResponse(request.id(), response), responseExecutor);
+                    .thenAcceptAsync(response -> sendResponse(request.taskId, response), responseExecutor);
         } catch (Exception e) {
-            System.out.printf("Failed to send mail[id:%s, url:%s, method:%s], error: %s%n",
-                    request.id(), request.url(), request.method(), e.getMessage());
-            sendErrorResponse(request.id(), e);
+            System.out.printf("Failed to send mail[taskId:%s, url:%s, method:%s], error: %s%n",
+                    request.taskId, request.url, request.method, e.getMessage());
+            sendErrorResponse(request.taskId, e);
         }
     }
 
@@ -205,8 +219,8 @@ public class AgentSender implements AutoCloseable{
     private static HttpRequest getHttpRequest(Request request) {
 //        System.out.println(request.toString());
         HttpRequest.Builder builder = HttpRequest.newBuilder()
-                .uri(URI.create(request.url()))
-                .method(request.method(), ofString(request.body()));
+                .uri(URI.create(request.url))
+                .method(request.method, ofString(request.body));
         String[] headers = getHeaders(request);
         for(int i=0; i < headers.length; i+=2){
             builder.header(headers[i], headers[i+1]);
@@ -235,13 +249,13 @@ public class AgentSender implements AutoCloseable{
     }
 
     /**
-     * Extracts the headers from the given request object and returns them as an array of strings.
+     * Extracts the header from the given request object and returns them as an array of strings.
      *
-     * @param request the request to extract headers from
-     * @return the headers as an array of strings
+     * @param request the request to extract header from
+     * @return the header as an array of strings
      */
     private static String[] getHeaders(Request request) {
-        String headers = request.headers();
+        String headers = request.header;
         if(headers == null || headers.isEmpty()){
             return new String[0];
         }
