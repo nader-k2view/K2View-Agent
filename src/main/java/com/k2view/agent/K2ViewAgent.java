@@ -6,10 +6,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import java.util.Map;
 
 import static java.net.http.HttpRequest.BodyPublishers.ofString;
@@ -21,24 +20,19 @@ import static java.net.http.HttpRequest.BodyPublishers.ofString;
 public class K2ViewAgent {
 
     /**
-     * A logger for the `K2ViewAgent` class.
-     */
-    private final Logger LOGGER = LoggerFactory.getLogger(K2ViewAgent.class);
-
-    /**
      * The polling interval in seconds for checking the inbox for new messages.
      */
-    private int pollingInterval = 60;
+    private final int pollingInterval = 60;
 
     /**
      * The `AgentSender` instance used for sending requests and processing responses.
      */
-    private AgentSender agentSender;
+    private final AgentSender agentSender;
 
     /**
      * The ID of the mailbox used for receiving messages.
      */
-    private String id;
+    private final String id;
 
     /**
      * The timestamp of the most recent inbox message received.
@@ -48,23 +42,28 @@ public class K2ViewAgent {
     /**
      * An instance of the Google Gson library for JSON serialization/deserialization.
      */
-    private Gson gson = new Gson();
+    private final Gson gson = new Gson();
 
     /**
      * An instance of the Java HTTP client for sending HTTP requests.
      */
-    private HttpClient client = HttpClient.newBuilder().build();
+    private final HttpClient client = HttpClient.newBuilder().build();
+
+    public K2ViewAgent() {
+        int maxQueueSize = 10_000;
+        this.agentSender = new AgentSender(maxQueueSize);
+        this.id = System.getenv("K2_MAILBOX_ID");
+        this.since = 0;
+    }
+
 
     /**
      * Starts the agent by initializing the `agentSender`, `id`, and `since` fields,
      * and calling the `start()` method.
      */
-    public void run() {
-        // Start the first thread that reads a list of URLs
-        agentSender = new AgentSender(10_000);
-        id = System.getenv("K2_MAILBOX_ID");
-        since = 0;
-        start();
+    public static void main(String[] args){
+        K2ViewAgent k2view = new K2ViewAgent();
+        k2view.start();
     }
 
     /**
@@ -76,19 +75,21 @@ public class K2ViewAgent {
             List<AgentSender.Response> responseList = new ArrayList<>();
             while (!Thread.interrupted()) {
                 List<AgentSender.Request> requests = getInboxMessages(responseList);
-                for (AgentSender.Request req : requests) {
-                    try {
-                        agentSender.send(req);
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
+                if (requests != null) {
+                    for (AgentSender.Request req : requests) {
+                        try {
+                            agentSender.send(req);
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
+                        }
+                        logMessage("INFO", "Added URL to the Queue:" + req);
                     }
-                    //requestsQueue.add(req);
-                    LOGGER.info("Added URL to the Queue:" + req);
                 }
 
                 try {
                     responseList = agentSender.receive(pollingInterval, TimeUnit.SECONDS);
-                    responseList.forEach(System.out::println);
+                    logMessage("INFO", responseList.toString() );
+
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -107,8 +108,7 @@ public class K2ViewAgent {
     private List<AgentSender.Request> getInboxMessages(List<AgentSender.Response> responses) {
         // Replace this code with the logic to read the URLs from the REST API
         String url = System.getenv("K2_MANAGER_URL");
-
-        LOGGER.info("MANAGER URL: " + url);
+        logMessage("INFO", "FETCHING MESSAGES FROM: " + url);
 
         Map<String,Object> r = new HashMap<>();
         r.put("responses", responses);
@@ -135,8 +135,17 @@ public class K2ViewAgent {
     /**
      * A nested class representing a manager message.
      */
-    class ManagerMessage {
+    public void logMessage(String severity, String message) {
+            LocalDateTime timestamp = LocalDateTime.now();
+            String threadName = Thread.currentThread().getName();
+            String callerMethodName = Thread.currentThread().getStackTrace()[2].getMethodName();
+            String logMessage = String.format("%s %s %s %s  %s", timestamp, threadName, severity, callerMethodName, message);
+            System.out.println(logMessage);
+        }
+        static class ManagerMessage {
         List<AgentSender.Request> tasks;
     }
 
 }
+
+
