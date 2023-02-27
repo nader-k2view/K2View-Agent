@@ -32,7 +32,7 @@ public class K2ViewAgent {
     /**
      * The ID of the mailbox used for receiving messages.
      */
-    private final String id;
+    private final String mailboxId;
 
     /**
      * The timestamp of the most recent inbox message received.
@@ -52,7 +52,7 @@ public class K2ViewAgent {
     public K2ViewAgent() {
         int maxQueueSize = 10_000;
         this.agentSender = new AgentSender(maxQueueSize);
-        this.id = System.getenv("K2_MAILBOX_ID");
+        this.mailboxId = System.getenv("K2_MAILBOX_ID");
         this.since = 0;
     }
 
@@ -112,7 +112,7 @@ public class K2ViewAgent {
 
         Map<String,Object> r = new HashMap<>();
         r.put("responses", responses);
-        r.put("id", id);
+        r.put("id", mailboxId);
         r.put("since", since);
         String body = gson.toJson(r);
         HttpRequest request = HttpRequest.newBuilder()

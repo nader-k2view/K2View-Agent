@@ -16,10 +16,12 @@ import static java.net.http.HttpResponse.BodyHandlers.ofString;
 
 
 /**
- * The `AgentSender` class provides an asynchronous mechanism for sending HTTP requests and receiving their responses.
- *
- * It uses a `LinkedBlockingQueue` to store incoming requests and an `ExecutorService` to handle outgoing requests.
- * Responses are added to an `outgoing` queue, which can be polled to retrieve responses synchronously or asynchronously.
+ * AgentSender Class provides an asynchronous mechanism for sending HTTP requests and receiving their responses.
+ * The class has a public method named send which accepts an HTTP request, and adds it to an incoming LinkedBlockingQueue. The requests are handled by a worker thread that continuously retrieves the next request from the incoming queue and sends it as an HTTP request to the remote server. The response is then added to an outgoing LinkedBlockingQueue.
+ * The class provides two methods for retrieving responses, receive and receiveAsync. The receive method blocks until a response is available in the outgoing queue, or until the specified timeout is reached, and then returns the available responses as a list. The receiveAsync method returns a CompletableFuture that completes when a response is available in the outgoing queue, or when the specified timeout is reached.
+ * The class has an inner class Request that represents an HTTP request, and a Response record that represents an HTTP response received from the server.
+ * The class uses HttpClient to send HTTP requests and handle outgoing responses. It also uses two ExecutorServices to handle incoming requests and outgoing responses.
+ * The class implements the AutoCloseable interface and provides a close method to close the AgentSender. This method sets the running flag to false, shuts down the request and response executors, and joins the worker thread.
  */
 public class AgentSender implements AutoCloseable{
     /**
@@ -32,19 +34,11 @@ public class AgentSender implements AutoCloseable{
        String method;
        String header;
        String body;
-
-       public Request(String taskId, String url, String method, String header, String body){
-           this.taskId = taskId;
-           this.url = url;
-           this.method = method;
-           this.header = header;
-           this.body = body;
-       }
     }
+
     /**
      * Represents an HTTP response received from the server.
      */
-
     public record Response(String taskId, int code, String body) {}
 
     /**
@@ -245,7 +239,7 @@ public class AgentSender implements AutoCloseable{
      * @param e the exception that caused the error
      */
     private void sendErrorResponse(String id, Exception e) {
-        outgoing.add(new Response(id, 500, "agent failed: " + e.getMessage()));
+        outgoing.add(new Response(id, 500, "K2View Agent Failed: " + e.getMessage()));
     }
 
     /**
