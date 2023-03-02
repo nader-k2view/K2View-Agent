@@ -80,9 +80,8 @@ public class AgentSender implements AutoCloseable{
      * Adds a request to the `incoming` queue.
      *
      * @param request  the HTTP request to send to the server.
-     * @throws Exception  if there is an error adding the request to the queue.
      */
-    public void send(Request request) throws Exception {
+    public void send(Request request)  {
         sendMail(request);
     }
 

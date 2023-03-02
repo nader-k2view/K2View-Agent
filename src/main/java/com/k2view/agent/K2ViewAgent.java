@@ -61,7 +61,7 @@ public class K2ViewAgent {
      * Starts the agent by initializing the `agentSender`, `id`, and `since` fields,
      * and calling the `start()` method.
      */
-    public static void main(String[] args){
+    public static void main(String[] args) throws InterruptedException {
         K2ViewAgent k2view = new K2ViewAgent();
         k2view.start();
     }
@@ -70,33 +70,31 @@ public class K2ViewAgent {
      * Starts the manager thread that continuously checks for new inbox messages
      * and sends them to the `agentSender` for processing.
      */
-    private void start() {
+    private void start() throws InterruptedException {
         Thread managerThread = new Thread(() -> {
+        try {
             List<AgentSender.Response> responseList = new ArrayList<>();
             while (!Thread.interrupted()) {
                 List<AgentSender.Request> requests = getInboxMessages(responseList);
                 if (requests != null) {
                     for (AgentSender.Request req : requests) {
-                        try {
-                            agentSender.send(req);
-                        } catch (Exception e) {
-                            throw new RuntimeException(e);
-                        }
+                        agentSender.send(req);
+
                         logMessage("INFO", "Added URL to the Queue:" + req);
                     }
                 }
 
-                try {
-                    responseList = agentSender.receive(pollingInterval, TimeUnit.SECONDS);
-                    logMessage("INFO", responseList.toString() );
-
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
+                responseList = agentSender.receive(pollingInterval, TimeUnit.SECONDS);
+                logMessage("INFO", responseList.toString());
             }
+        } catch (Exception e) {
+            e.printStackTrace();
+//            logMessage("ERROR", e.printStackTrace(););
+        }
         });
         managerThread.setName("MANAGER");
         managerThread.start();
+        managerThread.join();
     }
 
     /**
@@ -107,7 +105,7 @@ public class K2ViewAgent {
      */
     private List<AgentSender.Request> getInboxMessages(List<AgentSender.Response> responses) {
         // Replace this code with the logic to read the URLs from the REST API
-        String url = System.getenv("K2_MANAGER_URL");
+        String url = System.getenv("K2_MANAGER_URL").trim();
         logMessage("INFO", "FETCHING MESSAGES FROM: " + url);
 
         Map<String,Object> r = new HashMap<>();
