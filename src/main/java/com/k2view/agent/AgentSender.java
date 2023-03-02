@@ -1,6 +1,5 @@
 package com.k2view.agent;
 
-//package com.k2view.cdbms.usercode.lu.mailbox;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -8,6 +7,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -28,11 +28,11 @@ public class AgentSender implements AutoCloseable{
      * Represents an HTTP request that is sent to the server.
      */
 
-    public class Request{
+    public static class Request{
        String taskId;
        String url;
        String method;
-       String header;
+       Map<String,List<String>> header;
        String body;
     }
 
@@ -41,10 +41,6 @@ public class AgentSender implements AutoCloseable{
      */
     public record Response(String taskId, int code, String body) {}
 
-    /**
-     * A blocking queue that stores incoming requests.
-     */
-    private final BlockingQueue<Request> incoming;
 
     /**
      * A blocking queue that stores outgoing responses.
@@ -57,11 +53,6 @@ public class AgentSender implements AutoCloseable{
     private final ExecutorService requestExecutor;
 
     /**
-     * An `ExecutorService` that handles outgoing responses.
-     */
-    private final ExecutorService responseExecutor;
-
-    /**
      * An atomic boolean that determines if the `AgentSender` is running.
      */
     private final AtomicBoolean running;
@@ -72,26 +63,17 @@ public class AgentSender implements AutoCloseable{
     private final HttpClient httpClient;
 
     /**
-     * The thread that the `AgentSender` runs on.
-     */
-    private final Thread thread;
-
-    /**
      * Creates a new `AgentSender` instance with a specified maximum queue size.
      *
      * @param maxQueueSize  the maximum size of the incoming and outgoing queues.
      */
     public AgentSender(int maxQueueSize){
-        incoming = new LinkedBlockingQueue<>(maxQueueSize);
         outgoing = new LinkedBlockingQueue<>(maxQueueSize);
         requestExecutor = Executors.newCachedThreadPool(r -> new Thread(r, "AgentSender-RequestExecutor"));
-        responseExecutor = Executors.newCachedThreadPool(r -> new Thread(r, "AgentSender-ResponseExecutor"));
         running = new AtomicBoolean(true);
         httpClient = HttpClient.newBuilder()
                 .executor(requestExecutor)
                 .build();
-        thread = new Thread(this::run);
-        thread.start();
     }
 
     /**
@@ -101,7 +83,7 @@ public class AgentSender implements AutoCloseable{
      * @throws Exception  if there is an error adding the request to the queue.
      */
     public void send(Request request) throws Exception {
-        incoming.add(request);
+        sendMail(request);
     }
 
     /**
@@ -126,68 +108,6 @@ public class AgentSender implements AutoCloseable{
     }
 
     /**
-     * Asynchronously retrieves the responses from the outgoing queue.
-     *
-     * This method returns a CompletableFuture that completes when a response is available
-     * in the outgoing queue or the timeout is reached. The CompletableFuture will contain
-     * a list of the available responses or an empty list if no response is available.
-     *
-     * @param timeout   the maximum time to wait for a response
-     * @param timeUnit  the time unit of the timeout
-     * @return a CompletableFuture that completes when a response is available in the outgoing
-     *         queue or the timeout is reached.
-     */
-
-    public CompletableFuture<List<Response>> receiveAsync(long timeout, TimeUnit timeUnit) {
-        CompletableFuture<List<Response>> future = new CompletableFuture<>();
-        Executors.newSingleThreadScheduledExecutor().schedule(() -> {
-            List<Response> responses = new ArrayList<>();
-            Response response = outgoing.poll();
-            if (response == null) {
-                future.complete(responses);
-                return;
-            }
-            responses.add(response);
-            outgoing.drainTo(responses);
-            future.complete(responses);
-        }, timeout, timeUnit);
-        return future;
-    }
-
-
-    /**
-
-     Continuously retrieves the next request from the incoming queue and sends it
-     as an HTTP request to the remote server. The response is sent to the outgoing queue.
-     This method is called by the worker thread when it is started.
-     */
-    private void run() {
-        while (running.get()) {
-            Request request = getMail();
-            if (request == null) {
-                continue;
-            }
-            sendMail(request);
-        }
-    }
-
-    /**
-     * Retrieves the next mail request from the incoming queue. This method blocks until a
-     * request is available in the queue or the thread is interrupted.
-     *
-     * @return the next mail request or null if the thread is interrupted
-     */
-    private Request getMail() {
-        Request request = null;
-        try {
-            request = incoming.take();
-        } catch (InterruptedException e) {
-            running.set(false);
-        }
-        return request;
-    }
-
-    /**
      * Sends an HTTP request to the given URL with the given method and header, and returns the response as a Response object.
      *
      * @param request the request to send
@@ -196,7 +116,7 @@ public class AgentSender implements AutoCloseable{
     private void sendMail(Request request) {
         try {
             httpClient.sendAsync(getHttpRequest(request), ofString())
-                    .thenAcceptAsync(response -> sendResponse(request.taskId, response), responseExecutor);
+                    .thenAccept(response -> sendResponse(request.taskId, response));
         } catch (Exception e) {
             System.out.printf("Failed to send mail[taskId:%s, url:%s, method:%s], error: %s%n",
                     request.taskId, request.url, request.method, e.getMessage());
@@ -215,10 +135,9 @@ public class AgentSender implements AutoCloseable{
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(request.url))
                 .method(request.method, ofString(request.body));
-        String[] headers = getHeaders(request);
-        for(int i=0; i < headers.length; i+=2){
-            builder.header(headers[i], headers[i+1]);
-        }
+
+        Map<String, List<String>> header = request.header;
+        header.forEach((k,v)-> v.forEach(s -> builder.header(k,s)));
         return builder.build();
     }
 
@@ -243,30 +162,12 @@ public class AgentSender implements AutoCloseable{
     }
 
     /**
-     * Extracts the header from the given request object and returns them as an array of strings.
-     *
-     * @param request the request to extract header from
-     * @return the header as an array of strings
-     */
-    private static String[] getHeaders(Request request) {
-        String headers = request.header;
-        if(headers == null || headers.isEmpty()){
-            return new String[0];
-        }
-
-        return headers.split(",");
-    }
-
-    /**
      Closes the AgentSender by setting the running flag to false, shutting down the request and response executors,
      and joining the worker thread.
-     @throws InterruptedException if the thread is interrupted while waiting for the worker thread to complete.
      */
     @Override
-    public void close() throws InterruptedException {
+    public void close() {
         running.set(false);
         requestExecutor.shutdown();
-        responseExecutor.shutdown();
-        thread.join();
     }
 }
