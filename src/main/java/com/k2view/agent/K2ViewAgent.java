@@ -1,6 +1,7 @@
 package com.k2view.agent;
 
 import com.google.gson.Gson;
+import com.k2view.agent.AgentSender.Requests;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -11,6 +12,9 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.Map;
 
+import static com.k2view.agent.Utils.def;
+import static com.k2view.agent.Utils.env;
+import static java.lang.Integer.parseInt;
 import static java.net.http.HttpRequest.BodyPublishers.ofString;
 
 /**
@@ -22,7 +26,7 @@ public class K2ViewAgent {
     /**
      * The polling interval in seconds for checking the inbox for new messages.
      */
-    private final int pollingInterval = 60;
+    private final int pollingInterval;
 
     /**
      * The `AgentSender` instance used for sending requests and processing responses.
@@ -33,11 +37,6 @@ public class K2ViewAgent {
      * The ID of the mailbox used for receiving messages.
      */
     private final String mailboxId;
-
-    /**
-     * The timestamp of the most recent inbox message received.
-     */
-    private long since;
 
     /**
      * An instance of the Google Gson library for JSON serialization/deserialization.
@@ -53,7 +52,7 @@ public class K2ViewAgent {
         int maxQueueSize = 10_000;
         this.agentSender = new AgentSender(maxQueueSize);
         this.mailboxId = System.getenv("K2_MAILBOX_ID");
-        this.since = 0;
+        this.pollingInterval = parseInt(def(env("K2_POLLING_INTERVAL"), "10"));
     }
 
 
@@ -74,22 +73,23 @@ public class K2ViewAgent {
         Thread managerThread = new Thread(() -> {
         try {
             List<AgentSender.Response> responseList = new ArrayList<>();
+            long interval = pollingInterval;
+            String lastTaskId = "";
             while (!Thread.interrupted()) {
-                List<AgentSender.Request> requests = getInboxMessages(responseList);
-                if (requests != null) {
-                    for (AgentSender.Request req : requests) {
+                Requests inboxMessages = getInboxMessages(responseList, lastTaskId);
+                if(inboxMessages != null) {
+                    interval = inboxMessages.pollInterval > 0 ? inboxMessages.pollInterval : pollingInterval;
+                    for (AgentSender.Request req : inboxMessages.requests) {
+                        lastTaskId = req.taskId;
                         agentSender.send(req);
-
                         logMessage("INFO", "Added URL to the Queue:" + req);
                     }
                 }
-
-                responseList = agentSender.receive(pollingInterval, TimeUnit.SECONDS);
+                responseList = agentSender.receive(interval, TimeUnit.SECONDS);
                 logMessage("INFO", responseList.toString());
             }
         } catch (Exception e) {
             e.printStackTrace();
-//            logMessage("ERROR", e.printStackTrace(););
         }
         });
         managerThread.setName("MANAGER");
@@ -103,7 +103,7 @@ public class K2ViewAgent {
      * @param responses a list of previous responses received from the server
      * @return a list of `AgentSender.Request` objects
      */
-    private List<AgentSender.Request> getInboxMessages(List<AgentSender.Response> responses) {
+    private Requests getInboxMessages(List<AgentSender.Response> responses, String lastTaskId) {
         // Replace this code with the logic to read the URLs from the REST API
         String url = System.getenv("K2_MANAGER_URL").trim();
         logMessage("INFO", "FETCHING MESSAGES FROM: " + url);
@@ -111,7 +111,7 @@ public class K2ViewAgent {
         Map<String,Object> r = new HashMap<>();
         r.put("responses", responses);
         r.put("id", mailboxId);
-        r.put("since", since);
+        r.put("since", lastTaskId);
         String body = gson.toJson(r);
         HttpRequest request = HttpRequest.newBuilder()
                 .POST(ofString(body))
@@ -121,9 +121,7 @@ public class K2ViewAgent {
         try {
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             String jsonArrayString = response.body();
-            since = System.currentTimeMillis();
-            ManagerMessage mail = gson.fromJson(jsonArrayString, ManagerMessage.class);
-            return mail.tasks;
+            return gson.fromJson(jsonArrayString, Requests.class);
         } catch (Exception e) {
             e.printStackTrace();
             return null;
@@ -139,9 +137,6 @@ public class K2ViewAgent {
             String callerMethodName = Thread.currentThread().getStackTrace()[2].getMethodName();
             String logMessage = String.format("%s %s %s %s  %s", timestamp, threadName, severity, callerMethodName, message);
             System.out.println(logMessage);
-        }
-        static class ManagerMessage {
-        List<AgentSender.Request> tasks;
     }
 
 }

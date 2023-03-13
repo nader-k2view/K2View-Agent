@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static com.k2view.agent.Utils.dynamicString;
 import static java.net.http.HttpRequest.BodyPublishers.ofString;
 import static java.net.http.HttpResponse.BodyHandlers.ofString;
 
@@ -28,11 +29,16 @@ public class AgentSender implements AutoCloseable{
      * Represents an HTTP request that is sent to the server.
      */
 
+    public static class Requests {
+        List<Request> requests;
+        long pollInterval;
+    }
+
     public static class Request{
        String taskId;
        String url;
        String method;
-       Map<String,List<String>> header;
+       Map<String,Object> header;
        String body;
     }
 
@@ -130,13 +136,20 @@ public class AgentSender implements AutoCloseable{
      * @return the resulting HttpRequest object
      */
     private static HttpRequest getHttpRequest(Request request) {
-//        System.out.println(request.toString());
         HttpRequest.Builder builder = HttpRequest.newBuilder()
-                .uri(URI.create(request.url))
-                .method(request.method, ofString(request.body));
+                .uri(URI.create(dynamicString(request.url)))
+                .method(request.method, ofString(dynamicString(request.body)));
 
-        Map<String, List<String>> header = request.header;
-        header.forEach((k,v)-> v.forEach(s -> builder.header(k,s)));
+        Map<String, Object> header = request.header;
+        for (Map.Entry<String, Object> entry : header.entrySet()) {
+            Object value = entry.getValue();
+            if(value instanceof List<?> l){
+                l.forEach(s -> builder.header(entry.getKey(), dynamicString(s.toString())));
+            }
+            else {
+                builder.header(entry.getKey(), dynamicString(value.toString()));
+            }
+        }
         return builder.build();
     }
 
