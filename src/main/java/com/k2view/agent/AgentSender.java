@@ -1,6 +1,11 @@
 package com.k2view.agent;
 
 
+import com.google.gson.TypeAdapter;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonWriter;
+
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -25,22 +30,7 @@ import static java.net.http.HttpResponse.BodyHandlers.ofString;
  * The class implements the AutoCloseable interface and provides a close method to close the AgentSender. This method sets the running flag to false, shuts down the request and response executors, and joins the worker thread.
  */
 public class AgentSender implements AutoCloseable{
-    /**
-     * Represents an HTTP request that is sent to the server.
-     */
 
-    public static class Requests {
-        List<Request> requests;
-        long pollInterval;
-    }
-
-    public static class Request{
-       String taskId;
-       String url;
-       String method;
-       Map<String,Object> header;
-       String body;
-    }
 
     /**
      * Represents an HTTP response received from the server.
@@ -121,11 +111,11 @@ public class AgentSender implements AutoCloseable{
     private void sendMail(Request request) {
         try {
             httpClient.sendAsync(getHttpRequest(request), ofString())
-                    .thenAccept(response -> sendResponse(request.taskId, response));
+                    .thenAccept(response -> sendResponse(request.taskId(), response));
         } catch (Exception e) {
             System.out.printf("Failed to send mail[taskId:%s, url:%s, method:%s], error: %s%n",
-                    request.taskId, request.url, request.method, e.getMessage());
-            sendErrorResponse(request.taskId, e);
+                    request.taskId(), request.url(), request.method(), e.getMessage());
+            sendErrorResponse(request.taskId(), e);
         }
     }
 
@@ -137,10 +127,10 @@ public class AgentSender implements AutoCloseable{
      */
     private static HttpRequest getHttpRequest(Request request) {
         HttpRequest.Builder builder = HttpRequest.newBuilder()
-                .uri(URI.create(dynamicString(request.url)))
-                .method(request.method, ofString(dynamicString(request.body)));
+                .uri(URI.create(dynamicString(request.url())))
+                .method(request.method(), ofString(dynamicString(request.body())));
 
-        Map<String, Object> header = request.header;
+        Map<String, Object> header = request.header();
         for (Map.Entry<String, Object> entry : header.entrySet()) {
             Object value = entry.getValue();
             if(value instanceof List<?> l){

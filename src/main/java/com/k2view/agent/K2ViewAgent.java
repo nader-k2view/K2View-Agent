@@ -1,8 +1,5 @@
 package com.k2view.agent;
 
-import com.google.gson.Gson;
-import com.k2view.agent.AgentSender.Requests;
-
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -38,10 +35,6 @@ public class K2ViewAgent {
      */
     private final String mailboxId;
 
-    /**
-     * An instance of the Google Gson library for JSON serialization/deserialization.
-     */
-    private final Gson gson = new Gson();
 
     /**
      * An instance of the Java HTTP client for sending HTTP requests.
@@ -78,9 +71,9 @@ public class K2ViewAgent {
             while (!Thread.interrupted()) {
                 Requests inboxMessages = getInboxMessages(responseList, lastTaskId);
                 if(inboxMessages != null) {
-                    interval = inboxMessages.pollInterval > 0 ? inboxMessages.pollInterval : pollingInterval;
-                    for (AgentSender.Request req : inboxMessages.requests) {
-                        lastTaskId = req.taskId;
+                    interval = inboxMessages.pollInterval() > 0 ? inboxMessages.pollInterval() : pollingInterval;
+                    for (Request req : inboxMessages.requests()) {
+                        lastTaskId = req.taskId();
                         agentSender.send(req);
                         logMessage("INFO", "Added URL to the Queue:" + req);
                     }
@@ -112,7 +105,7 @@ public class K2ViewAgent {
         r.put("responses", responses);
         r.put("id", mailboxId);
         r.put("since", lastTaskId);
-        String body = gson.toJson(r);
+        String body = Utils.gson.toJson(r);
         HttpRequest request = HttpRequest.newBuilder()
                 .POST(ofString(body))
                 .uri(URI.create(url))
@@ -121,7 +114,7 @@ public class K2ViewAgent {
         try {
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             String jsonArrayString = response.body();
-            return gson.fromJson(jsonArrayString, Requests.class);
+            return Utils.gson.fromJson(jsonArrayString, Requests.class);
         } catch (Exception e) {
             e.printStackTrace();
             return null;

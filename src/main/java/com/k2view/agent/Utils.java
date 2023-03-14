@@ -1,8 +1,19 @@
 package com.k2view.agent;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+
 import java.util.function.UnaryOperator;
 
 public class Utils {
+
+    /**
+     * An instance of the Google Gson library for JSON serialization/deserialization.
+     */
+    public static final Gson gson = new GsonBuilder()
+            .registerTypeAdapter(Request.class, new Request.Adapter())
+            .registerTypeAdapter(Requests.class, new Requests.Adapter())
+            .create();
 
     /**
      * Get a value from a map, if not exists, return the default value
