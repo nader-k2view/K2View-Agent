@@ -1,11 +1,8 @@
-package com.k2view.agent;
+package com.k2view.agent.dispatcher;
 
+import com.k2view.agent.Request;
+import com.k2view.agent.Response;
 
-import com.google.gson.TypeAdapter;
-import com.google.gson.stream.JsonReader;
-import com.google.gson.stream.JsonWriter;
-
-import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -29,13 +26,7 @@ import static java.net.http.HttpResponse.BodyHandlers.ofString;
  * The class uses HttpClient to send HTTP requests and handle outgoing responses. It also uses two ExecutorServices to handle incoming requests and outgoing responses.
  * The class implements the AutoCloseable interface and provides a close method to close the AgentSender. This method sets the running flag to false, shuts down the request and response executors, and joins the worker thread.
  */
-public class AgentSender implements AutoCloseable{
-
-
-    /**
-     * Represents an HTTP response received from the server.
-     */
-    public record Response(String taskId, int code, String body) {}
+public class AgentDispatcherHttp implements AgentDispatcher {
 
 
     /**
@@ -63,7 +54,7 @@ public class AgentSender implements AutoCloseable{
      *
      * @param maxQueueSize  the maximum size of the incoming and outgoing queues.
      */
-    public AgentSender(int maxQueueSize){
+    public AgentDispatcherHttp(int maxQueueSize){
         outgoing = new LinkedBlockingQueue<>(maxQueueSize);
         requestExecutor = Executors.newCachedThreadPool(r -> new Thread(r, "AgentSender-RequestExecutor"));
         running = new AtomicBoolean(true);

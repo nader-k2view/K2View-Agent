@@ -1,22 +1,23 @@
 package com.k2view.agent;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.LocalDateTime;
+import com.k2view.agent.dispatcher.AgentDispatcher;
+import com.k2view.agent.dispatcher.AgentDispatcherHttp;
+import com.k2view.agent.postman.CloudManager;
+import com.k2view.agent.postman.Postman;
+
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
-import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.k2view.agent.Utils.def;
 import static com.k2view.agent.Utils.env;
 import static java.lang.Integer.parseInt;
-import static java.net.http.HttpRequest.BodyPublishers.ofString;
 
 /**
- The K2ViewAgent class represents an agent that reads a list of URLs from a REST API and forwards the requests to external URLs via AgentSender object.
- This class uses the Gson library for JSON serialization and the HttpClient class for sending HTTP requests.
+ * The K2ViewAgent class represents an agent that reads a list of URLs from a REST API and forwards the requests to external URLs via AgentSender object.
+ * This class uses the Gson library for JSON serialization and the HttpClient class for sending HTTP requests.
  */
 public class K2ViewAgent {
 
@@ -28,24 +29,27 @@ public class K2ViewAgent {
     /**
      * The `AgentSender` instance used for sending requests and processing responses.
      */
-    private final AgentSender agentSender;
+    private final AgentDispatcher dispatcher;
 
     /**
-     * The ID of the mailbox used for receiving messages.
+     * The `Postman` instance used for fetching messages from the REST API.
      */
-    private final String mailboxId;
+    private final Postman postman;
 
+    private final Executor executor;
 
     /**
-     * An instance of the Java HTTP client for sending HTTP requests.
+     * An atomic boolean that determines if the `K2ViewAgent` is running.
      */
-    private final HttpClient client = HttpClient.newBuilder().build();
+    private final AtomicBoolean running = new AtomicBoolean(true);
 
-    public K2ViewAgent() {
-        int maxQueueSize = 10_000;
-        this.agentSender = new AgentSender(maxQueueSize);
-        this.mailboxId = System.getenv("K2_MAILBOX_ID");
-        this.pollingInterval = parseInt(def(env("K2_POLLING_INTERVAL"), "10"));
+    private final CountDownLatch latch = new CountDownLatch(1);
+
+    public K2ViewAgent(Postman postman, int pollingInterval, AgentDispatcher agentSender, Executor executor) {
+        this.postman = postman;
+        this.dispatcher = agentSender;
+        this.pollingInterval = pollingInterval;
+        this.executor = executor;
     }
 
 
@@ -54,84 +58,51 @@ public class K2ViewAgent {
      * and calling the `start()` method.
      */
     public static void main(String[] args) throws InterruptedException {
-        K2ViewAgent k2view = new K2ViewAgent();
-        k2view.start();
+        AgentDispatcherHttp sender = new AgentDispatcherHttp(10_000);
+        Postman postman = new CloudManager(env("K2_MAILBOX_ID"), env("K2_MANAGER_URL"));
+        int interval = parseInt(def(env("K2_POLLING_INTERVAL"), "10"));
+        Executor executor = (Runnable r) -> new Thread(r, "MANAGER").start();
+        new K2ViewAgent(postman, interval, sender, executor).run();
     }
 
     /**
      * Starts the manager thread that continuously checks for new inbox messages
      * and sends them to the `agentSender` for processing.
      */
-    private void start() throws InterruptedException {
-        Thread managerThread = new Thread(() -> {
-        try {
-            List<AgentSender.Response> responseList = new ArrayList<>();
-            long interval = pollingInterval;
-            String lastTaskId = "";
-            while (!Thread.interrupted()) {
-                Requests inboxMessages = getInboxMessages(responseList, lastTaskId);
-                if(inboxMessages != null) {
-                    interval = inboxMessages.pollInterval() > 0 ? inboxMessages.pollInterval() : pollingInterval;
-                    for (Request req : inboxMessages.requests()) {
-                        lastTaskId = req.taskId();
-                        agentSender.send(req);
-                        logMessage("INFO", "Added URL to the Queue:" + req);
+    public void run() throws InterruptedException {
+        executor.execute(() -> {
+            try {
+                List<Response> responseList = new ArrayList<>();
+                long interval = pollingInterval;
+                String lastTaskId = "";
+                while (running.get()) {
+                    Requests inboxMessages = postman.getInboxMessages(responseList, lastTaskId);
+                    if (inboxMessages != null) {
+                        interval = inboxMessages.pollInterval() > 0 ? inboxMessages.pollInterval() : pollingInterval;
+                        for (Request req : inboxMessages.requests()) {
+                            lastTaskId = req.taskId();
+                            dispatcher.send(req);
+                            Utils.logMessage("INFO", "Added URL to the Queue:" + req);
+                        }
                     }
+                    responseList = dispatcher.receive(interval, TimeUnit.SECONDS);
+                    Utils.logMessage("INFO", responseList.toString());
                 }
-                responseList = agentSender.receive(interval, TimeUnit.SECONDS);
-                logMessage("INFO", responseList.toString());
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            } finally {
+                latch.countDown();
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
         });
-        managerThread.setName("MANAGER");
-        managerThread.start();
-        managerThread.join();
+        latch.await();
     }
 
     /**
-     * Retrieves a list of inbox messages from the REST API.
-     *
-     * @param responses a list of previous responses received from the server
-     * @return a list of `AgentSender.Request` objects
+     * Stops the agent by setting the `running` flag to `false`.
      */
-    private Requests getInboxMessages(List<AgentSender.Response> responses, String lastTaskId) {
-        // Replace this code with the logic to read the URLs from the REST API
-        String url = System.getenv("K2_MANAGER_URL").trim();
-        logMessage("INFO", "FETCHING MESSAGES FROM: " + url);
-
-        Map<String,Object> r = new HashMap<>();
-        r.put("responses", responses);
-        r.put("id", mailboxId);
-        r.put("since", lastTaskId);
-        String body = Utils.gson.toJson(r);
-        HttpRequest request = HttpRequest.newBuilder()
-                .POST(ofString(body))
-                .uri(URI.create(url))
-                .header("Content-Type", "application/json")
-                .build();
-        try {
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            String jsonArrayString = response.body();
-            return Utils.gson.fromJson(jsonArrayString, Requests.class);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
+    public void stop() {
+        running.set(false);
     }
-
-    /**
-     * A nested class representing a manager message.
-     */
-    public void logMessage(String severity, String message) {
-            LocalDateTime timestamp = LocalDateTime.now();
-            String threadName = Thread.currentThread().getName();
-            String callerMethodName = Thread.currentThread().getStackTrace()[2].getMethodName();
-            String logMessage = String.format("%s %s %s %s  %s", timestamp, threadName, severity, callerMethodName, message);
-            System.out.println(logMessage);
-    }
-
 }
 
 

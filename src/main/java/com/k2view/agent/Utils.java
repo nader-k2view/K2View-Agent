@@ -3,6 +3,7 @@ package com.k2view.agent;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import java.time.LocalDateTime;
 import java.util.function.UnaryOperator;
 
 public class Utils {
@@ -87,5 +88,16 @@ public class Utils {
             }
         }
         return result.toString();
+    }
+
+    /**
+     * A nested class representing a manager message.
+     */
+    public static void logMessage(String severity, String message) {
+        LocalDateTime timestamp = LocalDateTime.now();
+        String threadName = Thread.currentThread().getName();
+        String callerMethodName = Thread.currentThread().getStackTrace()[2].getMethodName();
+        String logMessage = String.format("%s %s %s %s  %s", timestamp, threadName, severity, callerMethodName, message);
+        System.out.println(logMessage);
     }
 }
