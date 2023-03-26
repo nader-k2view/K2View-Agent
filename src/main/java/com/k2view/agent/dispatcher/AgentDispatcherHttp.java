@@ -3,10 +3,18 @@ package com.k2view.agent.dispatcher;
 import com.k2view.agent.Request;
 import com.k2view.agent.Response;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509ExtendedTrustManager;
+import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -52,39 +60,48 @@ public class AgentDispatcherHttp implements AgentDispatcher {
     /**
      * Creates a new `AgentSender` instance with a specified maximum queue size.
      *
-     * @param maxQueueSize  the maximum size of the incoming and outgoing queues.
+     * @param maxQueueSize the maximum size of the incoming and outgoing queues.
      */
-    public AgentDispatcherHttp(int maxQueueSize){
+    public AgentDispatcherHttp(int maxQueueSize) {
         outgoing = new LinkedBlockingQueue<>(maxQueueSize);
         requestExecutor = Executors.newCachedThreadPool(r -> new Thread(r, "AgentSender-RequestExecutor"));
         running = new AtomicBoolean(true);
-        httpClient = HttpClient.newBuilder()
-                .executor(requestExecutor)
-                .build();
+        httpClient = initHttpClient();
+    }
+
+    private HttpClient initHttpClient() {
+        try {
+            return HttpClient.newBuilder()
+                    .sslContext(noCertificateCheckSSLContext())
+                    .executor(requestExecutor)
+                    .build();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to initialize http client", e);
+        }
     }
 
     /**
      * Adds a request to the `incoming` queue.
      *
-     * @param request  the HTTP request to send to the server.
+     * @param request the HTTP request to send to the server.
      */
-    public void send(Request request)  {
+    public void send(Request request) {
         sendMail(request);
     }
 
     /**
      * Polls the `outgoing` queue for a specified amount of time to retrieve responses synchronously.
      *
-     * @param timeout   the maximum amount of time to wait for a response.
-     * @param timeUnit  the unit of time for the timeout.
+     * @param timeout  the maximum amount of time to wait for a response.
+     * @param timeUnit the unit of time for the timeout.
      * @return a list of available HTTP responses or an empty list if no responses are available.
-     * @throws InterruptedException  if the thread is interrupted while waiting for a response.
+     * @throws InterruptedException if the thread is interrupted while waiting for a response.
      */
     public List<Response> receive(long timeout, TimeUnit timeUnit) throws InterruptedException {
         // pull from outgoing queue
         List<Response> responses = new ArrayList<>();
         Response response = outgoing.poll(timeout, timeUnit);
-        if(response == null){
+        if (response == null) {
             return responses;
         }
 
@@ -101,8 +118,8 @@ public class AgentDispatcherHttp implements AgentDispatcher {
      */
     private void sendMail(Request request) {
         try {
-            httpClient.sendAsync(getHttpRequest(request), ofString())
-                    .thenAccept(response -> sendResponse(request.taskId(), response));
+            HttpResponse<String> send = httpClient.send(getHttpRequest(request), ofString());
+            sendResponse(request.taskId(), send);
         } catch (Exception e) {
             System.out.printf("Failed to send mail[taskId:%s, url:%s, method:%s], error: %s%n",
                     request.taskId(), request.url(), request.method(), e.getMessage());
@@ -124,10 +141,9 @@ public class AgentDispatcherHttp implements AgentDispatcher {
         Map<String, Object> header = request.header();
         for (Map.Entry<String, Object> entry : header.entrySet()) {
             Object value = entry.getValue();
-            if(value instanceof List<?> l){
+            if (value instanceof List<?> l) {
                 l.forEach(s -> builder.header(entry.getKey(), dynamicString(s.toString())));
-            }
-            else {
+            } else {
                 builder.header(entry.getKey(), dynamicString(value.toString()));
             }
         }
@@ -137,7 +153,7 @@ public class AgentDispatcherHttp implements AgentDispatcher {
     /**
      * Adds a Response object to the outgoing queue.
      *
-     * @param id the ID of the request associated with the response
+     * @param id       the ID of the request associated with the response
      * @param response the response to add to the outgoing queue
      */
     private void sendResponse(String id, HttpResponse<String> response) {
@@ -148,19 +164,60 @@ public class AgentDispatcherHttp implements AgentDispatcher {
      * Adds an error Response object to the outgoing queue.
      *
      * @param id the ID of the request associated with the error response
-     * @param e the exception that caused the error
+     * @param e  the exception that caused the error
      */
     private void sendErrorResponse(String id, Exception e) {
         outgoing.add(new Response(id, 500, "K2View Agent Failed: " + e.getMessage()));
     }
 
     /**
-     Closes the AgentSender by setting the running flag to false, shutting down the request and response executors,
-     and joining the worker thread.
+     * Closes the AgentSender by setting the running flag to false, shutting down the request and response executors,
+     * and joining the worker thread.
      */
     @Override
     public void close() {
         running.set(false);
         requestExecutor.shutdown();
+    }
+
+    private static SSLContext noCertificateCheckSSLContext() throws NoSuchAlgorithmException, KeyManagementException {
+        TrustManager[] trustAllCerts = new TrustManager[]{
+                new X509ExtendedTrustManager() {
+                    @Override
+                    public void checkClientTrusted(X509Certificate[] chain, String authType, Socket socket) {
+                        // trust all
+                    }
+
+                    @Override
+                    public void checkServerTrusted(X509Certificate[] chain, String authType, Socket socket) {
+                        // trust all
+                    }
+
+                    @Override
+                    public void checkClientTrusted(X509Certificate[] chain, String authType, SSLEngine engine) {
+                        // trust all
+                    }
+
+                    @Override
+                    public void checkServerTrusted(X509Certificate[] chain, String authType, SSLEngine engine) {
+                        // trust all
+                    }
+
+                    public X509Certificate[] getAcceptedIssuers() {
+                        return new X509Certificate[0];
+                    }
+
+                    public void checkClientTrusted(X509Certificate[] certs, String authType) {
+                        // trust all
+                    }
+
+                    public void checkServerTrusted(X509Certificate[] certs, String authType) {
+                        // trust all
+                    }
+                }
+        };
+        SSLContext sc = SSLContext.getInstance("TLS");
+        sc.init(null, trustAllCerts, new java.security.SecureRandom());
+        return sc;
     }
 }
