@@ -118,8 +118,14 @@ public class AgentDispatcherHttp implements AgentDispatcher {
      */
     private void sendMail(Request request) {
         try {
-            HttpResponse<String> send = httpClient.send(getHttpRequest(request), ofString());
-            sendResponse(request.taskId(), send);
+            httpClient.sendAsync(getHttpRequest(request), ofString())
+                    .thenAccept(r -> sendResponse(request.taskId(), r))
+                    .exceptionally(e -> {
+                        System.out.printf("Failed to send mail[taskId:%s, url:%s, method:%s], error: %s%n",
+                                request.taskId(), request.url(), request.method(), e.getMessage());
+                        sendErrorResponse(request.taskId(), e);
+                        return null;
+                    });
         } catch (Exception e) {
             System.out.printf("Failed to send mail[taskId:%s, url:%s, method:%s], error: %s%n",
                     request.taskId(), request.url(), request.method(), e.getMessage());
@@ -166,7 +172,7 @@ public class AgentDispatcherHttp implements AgentDispatcher {
      * @param id the ID of the request associated with the error response
      * @param e  the exception that caused the error
      */
-    private void sendErrorResponse(String id, Exception e) {
+    private void sendErrorResponse(String id, Throwable e) {
         outgoing.add(new Response(id, 500, "K2View Agent Failed: " + e.getMessage()));
     }
 

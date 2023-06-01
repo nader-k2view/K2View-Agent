@@ -1,0 +1,9 @@
+version: '3.9'
+services:
+  agent:
+    image: k2v-agent:latest
+    environment:
+      #K2_MAILBOX_ID: 
+      #K2_MANAGER_URL: 
+      #kubeInterface: 
+      #kubeToken: 
