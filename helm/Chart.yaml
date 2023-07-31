@@ -1,6 +1,6 @@
 apiVersion: v2
-name: k2viewagent
-description: A Helm chart for Kubernetes
+name: k2view-agent
+description: A Helm chart for k2view cloud manager site agent
 
 # A chart can be either an 'application' or a 'library' chart.
 #
