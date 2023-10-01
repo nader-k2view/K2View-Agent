@@ -1,7 +1,0 @@
-# name space yaml
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: k2view-agent
-  labels:
-    app: k2view-agent
